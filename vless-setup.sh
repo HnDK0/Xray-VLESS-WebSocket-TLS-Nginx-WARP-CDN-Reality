@@ -727,7 +727,7 @@ checkSslCronStatus() {
 manageSslCron() {
     while true; do
         clear
-        local status=$(checkSslCronStatus | sed 's/\x1b\[[0-9;]*m//g')
+        local status=$(checkSslCronStatus)
         echo -e "${cyan}=== Управление автообновлением SSL ===${reset}"
         echo -e "Статус: $status"
         echo ""
@@ -789,7 +789,7 @@ checkLogClearCronStatus() {
 manageLogClearCron() {
     while true; do
         clear
-        local status=$(checkLogClearCronStatus | sed 's/\x1b\[[0-9;]*m//g')
+        local status=$(checkLogClearCronStatus)
         echo -e "${cyan}=== Управление автоочисткой логов ===${reset}"
         echo -e "Статус: $status"
         echo ""
@@ -900,14 +900,14 @@ install() {
 menu() {
     while true; do
         clear
-        local s_nginx=$(getServiceStatus nginx | sed 's/\x1b\[[0-9;]*m//g')
-        local s_xray=$(getServiceStatus xray | sed 's/\x1b\[[0-9;]*m//g')
+        local s_nginx=$(getServiceStatus nginx)
+        local s_xray=$(getServiceStatus xray)
         local s_warp=$(getWarpStatusRaw)
-        local s_ssl=$(checkCertExpiry | sed 's/\x1b\[[0-9;]*m//g')
-        local s_bbr=$(getBbrStatus | sed 's/\x1b\[[0-9;]*m//g')
-        local s_f2b=$(getF2BStatus | sed 's/\x1b\[[0-9;]*m//g')
-        local s_jail=$(getWebJailStatus | sed 's/\x1b\[[0-9;]*m//g')
-        local s_cdn=$(getCdnStatus | sed 's/\x1b\[[0-9;]*m//g')
+        local s_ssl=$(checkCertExpiry)
+        local s_bbr=$(getBbrStatus)
+        local s_f2b=$(getF2BStatus)
+        local s_jail=$(getWebJailStatus)
+        local s_cdn=$(getCdnStatus)
 
         echo -e "${cyan}================================================================${reset}"
         echo -e "   ${red}XRAY VLESS + WARP + CDN${reset} | $(date +'%d.%m.%Y %H:%M')"
