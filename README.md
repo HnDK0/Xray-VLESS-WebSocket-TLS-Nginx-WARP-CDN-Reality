@@ -17,7 +17,7 @@
 ## Быстрая установка (1 строка)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HnDK0/VLESS-WebSocket-TLS-Nginx-WARP/main/vless-setup.sh | sudo bash
+curl -L https://raw.githubusercontent.com/HnDK0/VLESS-WebSocket-TLS-Nginx-WARP/main/vless-setup.sh  -o vwn && bash vwn
 ```
 
 Или классический способ:
