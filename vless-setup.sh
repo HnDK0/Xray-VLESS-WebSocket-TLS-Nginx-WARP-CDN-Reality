@@ -624,7 +624,7 @@ enableBBR() {
 
 setupFail2Ban() {
     echo -e "${cyan}Настройка Fail2Ban...${reset}"
-    installPackage "fail2ban"
+    ${PACKAGE_MANAGEMENT_INSTALL} "fail2ban"
     local ssh_port=$(grep "Port " /etc/ssh/sshd_config | awk '{print $2}' || echo "22")
     
     cat > /etc/fail2ban/jail.local <<EOF
@@ -662,7 +662,7 @@ enabled = true
 port = http,https
 filter = nginx-probe
 logpath = /var/log/nginx/access.log
-maxretry = 2
+maxretry = 5
 bantime = 24h
 EOF
     systemctl restart fail2ban
