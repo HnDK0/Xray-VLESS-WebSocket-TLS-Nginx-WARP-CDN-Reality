@@ -1,10 +1,8 @@
 #!/bin/bash
 # =================================================================
-# Xray VLESS + WebSocket + TLS + Nginx + WARP + CDN
-# Версия: 2.2 — Финальная
+# Xray VLESS + WebSocket + TLS + Nginx + WARP + CDN + Reality
+# Версия: 2.3
 # =================================================================
-
-set -euo pipefail   # FIX: Раньше скрипт продолжал выполнение при ошибках
 
 # Цвета для вывода
 red=$(tput setaf 1 && tput bold)
@@ -1121,13 +1119,18 @@ writeRealityConfig() {
     local destHost="${dest%%:*}"
 
     echo -e "${cyan}Генерация ключей Reality...${reset}"
-    local keys
-    keys=$(xray x25519 2>/dev/null)
-    local privKey pubKey shortId new_uuid
+    local keys privKey pubKey shortId new_uuid
 
-    privKey=$(echo "$keys" | grep "Private key:" | awk '{print $3}')
-    pubKey=$(echo "$keys"  | grep "Public key:"  | awk '{print $3}')
-    shortId=$(head /dev/urandom | tr -dc 'a-f0-9' | head -c 16)
+    # Генерируем x25519 ключи
+    keys=$(xray x25519 2>/dev/null) || { echo "${red}Ошибка: xray x25519 не работает${reset}"; return 1; }
+
+    privKey=$(echo "$keys" | awk '/Private key:/{print $3}')
+    pubKey=$(echo "$keys"  | awk '/Public key:/{print $3}')
+
+    [ -z "$privKey" ] || [ -z "$pubKey" ] && { echo "${red}Ошибка получения ключей${reset}"; return 1; }
+
+    # Генерируем shortId — избегаем SIGPIPE из-за pipefail
+    shortId=$(cat /proc/sys/kernel/random/uuid | tr -d '-' | cut -c1-16)
     new_uuid=$(cat /proc/sys/kernel/random/uuid)
 
     mkdir -p /usr/local/etc/xray
@@ -1277,15 +1280,18 @@ installReality() {
         1) dest="microsoft.com:443" ;;
         2) dest="www.apple.com:443" ;;
         3) dest="www.amazon.com:443" ;;
-        4) read -rp "Введите dest (host:port): " dest ;;
+        4)
+            read -rp "Введите dest (host:port): " dest
+            [ -z "$dest" ] && { echo "${red}Dest не указан.${reset}"; return 1; }
+            ;;
         *) dest="microsoft.com:443" ;;
     esac
 
-    # Открываем порт в UFW
+    echo -e "${cyan}Открываем порт $realityPort в UFW...${reset}"
     ufw allow "$realityPort"/tcp comment 'Xray Reality' 2>/dev/null || true
 
-    writeRealityConfig "$realityPort" "$dest"
-    setupRealityService
+    writeRealityConfig "$realityPort" "$dest" || return 1
+    setupRealityService || return 1
 
     echo -e "\n${green}Reality установлен!${reset}"
     showRealityQR
@@ -1411,6 +1417,7 @@ removeReality() {
 }
 
 manageReality() {
+    set +e
     while true; do
         clear
         local s_reality
@@ -1521,7 +1528,6 @@ SYSCTL
 
 install() {
     isRoot
-    set +e
     clear
     echo "${green}>>> Установка Xray VLESS + WARP + CDN <<<${reset}"
     prepareSoftware
@@ -1548,7 +1554,6 @@ install() {
 
     systemctl enable --now xray nginx
     systemctl restart xray nginx
-    set -e
 
     echo -e "\n${green}Установка завершена!${reset}"
     getQrCode
@@ -1559,6 +1564,7 @@ install() {
 # ============================================================
 
 menu() {
+    set +e
     while true; do
         clear
         local s_nginx s_xray s_warp s_ssl s_bbr s_f2b s_jail s_cdn s_reality
