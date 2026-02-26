@@ -1,243 +1,261 @@
-# Xray VLESS + WebSocket + TLS + Nginx + WARP + CDN
+# Xray VLESS + WebSocket + TLS + Nginx + WARP + CDN + Reality
 
-Автоматический установщик Xray VLESS с поддержкой WebSocket, TLS, Nginx, Cloudflare WARP и CDN защитой.
+Автоматический установщик Xray VLESS с поддержкой WebSocket, TLS, Nginx, Cloudflare WARP, CDN защитой и VLESS+Reality для прямых подключений.
 
 ## Особенности
 
-- ✅ **VLESS + WebSocket + TLS** — современный и безопасный протокол
-- ✅ **Nginx** — как reverse proxy с сайтом-заглушкой
-- ✅ **Cloudflare WARP** — для обхода блокировок (OpenAI, ChatGPT и др.)
-- ✅ **CDN поддержка** — защита от прямого доступа к серверу
+- ✅ **VLESS + WebSocket + TLS** — для подключений через Cloudflare CDN
+- ✅ **VLESS + Reality** — для прямых подключений (роутер, Clash и др.)
+- ✅ **Nginx** — reverse proxy с сайтом-заглушкой
+- ✅ **Cloudflare WARP** — роутинг выбранных доменов (OpenAI, ChatGPT и др.)
+- ✅ **WARP Watchdog** — автовосстановление WARP при обрыве
+- ✅ **CDN поддержка** — блокировка прямого доступа, только через Cloudflare
 - ✅ **Два метода SSL** — Cloudflare DNS API или Standalone
 - ✅ **Fail2Ban + Web-Jail** — защита от брутфорса и сканеров
-- ✅ **BBR** — опциональное ускорение TCP
+- ✅ **BBR** — ускорение TCP
 - ✅ **Anti-Ping** — скрытие сервера от обнаружения
-- ✅ **Управление логами** — просмотр и очистка
+- ✅ **Приватность** — access логи отключены, sniffing выключен
+- ✅ **IPv4-only outbound** — стабильная работа на хостингах с проблемным IPv6
 
-## Быстрая установка (1 строка)
+## Быстрая установка
 
 ```bash
-curl -L https://raw.githubusercontent.com/HnDK0/VLESS-WebSocket-TLS-Nginx-WARP/main/vless-setup.sh  -o vwn && bash vwn
-```
-
-Или классический способ:
-```bash
-wget https://raw.githubusercontent.com/HnDK0/VLESS-WebSocket-TLS-Nginx-WARP/main/vless-setup.sh
-chmod +x vless-setup.sh
-sudo ./vless-setup.sh
+curl -L https://raw.githubusercontent.com/HnDK0/VLESS-WebSocket-TLS-Nginx-WARP/main/vless-setup.sh -o vwn && bash vwn
 ```
 
 После первого запуска скрипт доступен как команда:
 ```bash
-sudo vwn
+vwn
 ```
 
 ## Требования
 
-- Чистый VPS с Ubuntu/Debian/CentOS
+- Ubuntu 22.04+ / Debian 11+
 - Root доступ
-- Домен, направленный на сервер (для SSL)
+- Домен, направленный на сервер (для WS+TLS)
+- Для Reality — только IP сервера, домен не нужен
+
+## Архитектура
+
+```
+Клиент (CDN/мобильный)
+    └── Cloudflare CDN → 443/HTTPS → Nginx → VLESS+WS → Xray → WARP/Internet
+
+Клиент (роутер/Clash/прямое)
+    └── IP:8443/TCP → VLESS+Reality → Xray → WARP/Internet
+```
 
 ## Порты
 
-| Порт | Назначение |
-|------|-----------|
-| 22   | SSH (изменяемый) |
-| 443  | VLESS + Nginx HTTPS |
-| 40000| WARP SOCKS5 (локальный) |
+| Порт  | Назначение                  |
+|-------|-----------------------------|
+| 22    | SSH (изменяемый)            |
+| 443   | VLESS+WS+TLS через Nginx    |
+| 8443  | VLESS+Reality (по умолчанию)|
+| 40000 | WARP SOCKS5 (локальный)     |
 
-## Меню управления (29 пунктов)
+## Меню управления
 
 ```
 ================================================================
-   XRAY VLESS + WARP + CDN | 06.02.2026 07:44
+   XRAY VLESS + WARP + CDN + REALITY | 27.02.2026 21:00
 ================================================================
   NGINX: RUNNING  |  XRAY: RUNNING  |  WARP: ACTIVE
   SSL: OK (89 d)  |  BBR: ON  |  F2B: OFF
-  WebJail: NO  |  CDN: OFF
+  WebJail: NO  |  CDN: OFF  |  Reality: ON (порт 8443)
 ----------------------------------------------------------------
-	1.  Установить Xray (VLESS+WS+TLS+WARP+CDN)
-	2.  Показать QR-код и ссылку
-	3.  Сменить UUID
-	—————————————— Конфигурация —————————————
-	4.  Изменить порт Xray
-	5.  Изменить путь WebSocket
-	6.  Изменить сайт-заглушку
-	7.  Перевыпустить SSL сертификат
-	8.  Сменить домен
-	—————————————— CDN и WARP ———————————————
-	9.  Переключить CDN режим (ON/OFF)
-	10. Переключить режим WARP (Global/Split)
-	11. Добавить домен в WARP
-	12. Удалить домен из WARP
-	13. Редактировать список WARP (Nano)
-	14. Проверить IP (Real vs WARP)
-	—————————————— Безопасность —————————————
-	15. Включить BBR
-	16. Включить Fail2Ban
-	17. Включить Web-Jail
-	18. Сменить SSH порт
-	—————————————— Логи —————————————————————
-	19. Логи Xray (access)
-	20. Логи Xray (error)
-	21. Логи Nginx (access)
-	22. Логи Nginx (error)
-	23. Очистить все логи
-	—————————————— Сервисы ——————————————————
-	24. Перезапустить все сервисы
-	25. Обновить Xray-core
-	26. Полное удаление
-	—————————————— UFW, SSL и Logs ————————————
-	27. Управление UFW (открыть/закрыть порты)
-	28. Управление автообновлением SSL
-	29. Управление автоочисткой логов
-	—————————————— Выход ————————————————————
-	0.   Выйти
+    1.  Установить Xray (VLESS+WS+TLS+WARP+CDN)
+    2.  Показать QR-код и ссылку
+    3.  Сменить UUID
+    —————————————— Конфигурация —————————————
+    4.  Изменить порт Xray
+    5.  Изменить путь WebSocket
+    6.  Изменить сайт-заглушку
+    7.  Перевыпустить SSL сертификат
+    8.  Сменить домен
+    —————————————— CDN и WARP ———————————————
+    9.  Переключить CDN режим (ON/OFF)
+    10. Переключить режим WARP (Global/Split)
+    11. Добавить домен в WARP
+    12. Удалить домен из WARP
+    13. Редактировать список WARP (Nano)
+    14. Проверить IP (Real vs WARP)
+    —————————————— Безопасность —————————————
+    15. Включить BBR
+    16. Включить Fail2Ban
+    17. Включить Web-Jail
+    18. Сменить SSH порт
+    30. Установить WARP Watchdog
+    —————————————— Логи —————————————————————
+    19. Логи Xray (access)
+    20. Логи Xray (error)
+    21. Логи Nginx (access)
+    22. Логи Nginx (error)
+    23. Очистить все логи
+    —————————————— Сервисы ——————————————————
+    24. Перезапустить все сервисы
+    25. Обновить Xray-core
+    26. Полное удаление
+    —————————————— UFW, SSL, Logs ———————————
+    27. Управление UFW
+    28. Управление автообновлением SSL
+    29. Управление автоочисткой логов
+    —————————————— Reality ——————————————————
+    31. Управление VLESS + Reality
+    —————————————— Выход ————————————————————
+    0.  Выйти
 ----------------------------------------------------------------
 ```
 
-## CDN режим
+## VLESS + Reality (пункт 31)
 
-При включении CDN режима (пункт 9):
-- Скачиваются актуальные IP адреса Cloudflare
-- Создается geo-модуль для определения CF IP
+Reality — альтернативный транспорт для прямых подключений без CDN. Работает как отдельный сервис (`xray-reality`) параллельно с основным Xray.
+
+**Когда использовать:**
+- Clash на роутере (все устройства через роутер)
+- Прямое подключение без Cloudflare
+- Слабое железо роутера (меньше оверхед чем WS+TLS)
+
+**Как работает:**
+Xray маскируется под реальный сайт (например `microsoft.com`). Клиент подключается напрямую к IP сервера, TLS fingerprint выглядит как легитимный трафик.
+
+**Подменю Reality:**
+- Установить с выбором порта и dest-сайта
+- Показать QR-код и ссылку для клиента
+- Сменить UUID / порт / dest
+- Логи / Перезапуск / Удаление
+
+**Ссылка для клиента:**
+```
+vless://UUID@IP:8443?security=reality&sni=microsoft.com&fp=chrome&pbk=PUBLIC_KEY&sid=SHORT_ID&type=tcp&flow=xtls-rprx-vision
+```
+
+**Ограничение:** Reality не работает через Cloudflare CDN. Для CDN используйте WS+TLS (основной конфиг).
+
+## CDN режим (пункт 9)
+
+При включении:
+- Скачиваются актуальные IP подсети Cloudflare
 - Прямой доступ к серверу блокируется (return 444)
-- Работает только через Cloudflare Proxy
+- Real IP восстанавливается через заголовок `CF-Connecting-IP`
+- Доступ только через Cloudflare Proxy
 
-**Важно:** Включайте CDN режим ТОЛЬКО после настройки домена через Cloudflare с включенным оранжевым облаком!
+**Важно:** Включайте только после настройки домена через Cloudflare с включённым оранжевым облаком. Несовместимо с Reality на том же порту.
 
-## WARP режимы
+## WARP (пункты 10–14)
 
-**Global** — весь трафик через WARP (для максимальной анонимности)
+WARP применяется одновременно к обоим конфигам — WS и Reality.
 
-**Split** — только выбранные домены через WARP (по умолчанию OpenAI/ChatGPT)
+**Split режим** (по умолчанию) — только выбранные домены через WARP:
+```
+openai.com
+chatgpt.com
+oaistatic.com
+oaiusercontent.com
+auth0.openai.com
+```
+
+**Global режим** — весь трафик через WARP.
+
+**WARP Watchdog (пункт 30)** — cron каждые 2 минуты проверяет SOCKS5 и переподключает если WARP отвалился.
 
 ## SSL сертификаты
 
 **Метод 1 — Cloudflare DNS API** (рекомендуется):
-- Порт 80 остается закрытым
-- Требуются API ключи Cloudflare
-- Автоматическое продление
+- Порт 80 не нужен
+- Требуются Email и Global API Key Cloudflare
 
 **Метод 2 — Standalone**:
-- Временно открывает порт 80
+- Временно открывает порт 80 через хуки UFW
 - Не требует API ключей
-- Автоматическое открытие/закрытие порта через хуки
 
-### Автообновление SSL
+Автообновление настраивается через `/etc/cron.d/acme-renew` (раз в 35 дней в 3:00).
 
-При установке автоматически настраивается cron задача:
-- **Время**: раз в 35 дней в 3:00
-- **Команда**: `acme.sh --cron` с хуками для UFW
-- **Хуки**: `vwn open-80` перед обновлением, `vwn close-80` после
-- **Лог**: `/var/log/acme_cron.log`
+## Приватность
 
-Управление автообновлением — пункт меню **28**.
+- Access логи Xray отключены (`"access": "none"`)
+- Sniffing выключен — сервер не читает содержимое трафика
+- Домены назначения не логируются
+- loglevel: `error` — только критические ошибки
 
-### Автоочистка логов
-
-При установке автоматически настраивается:
-- **Ротация логов** — ежедневно, хранение 7 дней
-- **Очистка логов** — раз в неделю (воскресенье в 4:00)
-
-Управление автоочисткой — пункт меню **29**.
-
-## UFW Firewall
-
-Управление портами — пункт меню **27**:
-- Показать текущие правила
-- Открыть порт (с выбором tcp/udp/both)
-- Закрыть порт
-- Включить/выключить UFW
-- Сбросить все правила
-
-## Безопасность
-
-| Функция | Описание |
-|---------|----------|
-| UFW | Firewall с правилами для 22, 443 |
-| Anti-Ping | Скрытие сервера от пингов (ICMP) — включается автоматически при установке |
-| Fail2Ban | Блокировка брутфорса SSH |
-| Web-Jail | Блокировка сканеров nginx (404 ловушка) |
-| CDN Only | Доступ только через Cloudflare |
-
-### Anti-Ping
-
-При установке автоматически отключается ответ на ICMP ping:
-```bash
-sysctl -w net.ipv4.icmp_echo_ignore_all=1
-```
-
-Это предотвращает обнаружение сервера как прокси/VPN через простой ping-скан.
-
-## Структура конфигов
+## Структура файлов
 
 ```
 /etc/nginx/
-├── nginx.conf                 # Основной конфиг
+├── nginx.conf
 ├── conf.d/
-│   ├── xray.conf             # VLESS server
-│   ├── default.conf          # Заглушка для IP
-│   ├── cloudflare_whitelist.conf    # Geo-модуль CF
-│   └── cloudflare_real_ips.conf     # Real IP от CF
+│   ├── xray.conf                    # VLESS+WS сервер
+│   ├── default.conf                 # Заглушка для прямых IP
+│   ├── cloudflare_whitelist.conf    # Geo-модуль CF IP
+│   └── cloudflare_real_ips.conf     # Real IP restore
 └── cert/
-    ├── cert.pem              # SSL сертификат
-    ├── cert.key              # SSL ключ
-    ├── default.crt           # Самоподписанный
-    └── default.key
+    ├── cert.pem / cert.key          # SSL сертификат
+    └── default.crt / default.key   # Самоподписанный
 
 /usr/local/etc/xray/
-└── config.json               # Конфиг Xray
+├── config.json          # Конфиг VLESS+WS
+├── reality.json         # Конфиг VLESS+Reality
+├── reality_client.txt   # Параметры клиента Reality
+└── warp_domains.txt     # Домены для WARP split
 
-/usr/local/etc/xray/
-└── warp_domains.txt          # Список доменов для WARP
+/etc/systemd/system/
+├── xray.service         # VLESS+WS сервис
+└── xray-reality.service # Reality сервис
+
+/etc/cron.d/
+├── acme-renew           # Автообновление SSL
+├── clear-logs           # Автоочистка логов
+└── warp-watchdog        # Мониторинг WARP
+
+/etc/sysctl.d/
+└── 99-xray.conf         # Anti-ping, somaxconn, syn_backlog
 ```
 
-## Проблемы и решения
+## Решение проблем
 
 ### WARP не подключается
 ```bash
-sudo systemctl restart warp-svc
-sleep 3
-sudo warp-cli --accept-tos connect
-sudo warp-cli --accept-tos status
+systemctl restart warp-svc
+sleep 5
+warp-cli --accept-tos connect
+warp-cli --accept-tos status
+```
+
+### Reality сервис не запускается
+```bash
+systemctl status xray-reality
+journalctl -u xray-reality -n 50
+xray -test -config /usr/local/etc/xray/reality.json
 ```
 
 ### Nginx не запускается
 ```bash
-sudo nginx -t              # Проверка конфига
-sudo systemctl restart nginx
+nginx -t
+systemctl restart nginx
 ```
 
-### SSL сертификат истек
+### SSL истёк
 ```bash
-sudo vwn
-# Пункт 7 — Перевыпустить SSL сертификат
-# или
-# Пункт 28 — Проверить автообновление
+vwn  # Пункт 7 или пункт 28
 ```
+
+### Все устройства лагают через роутер
+Используйте Reality вместо WS+TLS — меньше оверхед, стабильнее на слабом железе.
 
 ## Удаление
 
 ```bash
-sudo vwn
-# Пункт 26 — Полное удаление
+vwn  # Пункт 26
 ```
 
-Или вручную:
-```bash
-sudo systemctl stop nginx xray warp-svc
-sudo warp-cli disconnect
-sudo apt purge -y nginx cloudflare-warp
-sudo bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh) @ remove
-sudo rm -rf /etc/nginx /usr/local/etc/xray /root/.cloudflare_api
-```
+Удаляет: Xray, Nginx, WARP, оба конфига, все cron задачи, сервисы.
 
-## Благодарности
+## Зависимости
 
 - [Xray-core](https://github.com/XTLS/Xray-core)
 - [Cloudflare WARP](https://1.1.1.1/)
 - [acme.sh](https://github.com/acmesh-official/acme.sh)
+- nginx, jq, ufw, fail2ban, qrencode
 
 ## Лицензия
 
