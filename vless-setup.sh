@@ -1100,7 +1100,7 @@ manageLogClearCron() {
 realityConfigPath='/usr/local/etc/xray/reality.json'
 
 generateRealityKeys() {
-    xray x25519 2>/dev/null || { echo "${red}Ошибка генерации ключей Reality${reset}"; return 1; }
+    /usr/local/bin/xray x25519 2>/dev/null || { echo "${red}Ошибка генерации ключей Reality${reset}"; return 1; }
 }
 
 getRealityStatus() {
@@ -1122,10 +1122,10 @@ writeRealityConfig() {
     local keys privKey pubKey shortId new_uuid
 
     # Генерируем x25519 ключи
-    keys=$(xray x25519 2>/dev/null) || { echo "${red}Ошибка: xray x25519 не работает${reset}"; return 1; }
+    keys=$(/usr/local/bin/xray x25519 2>/dev/null) || { echo "${red}Ошибка: xray x25519 не работает${reset}"; return 1; }
 
-    privKey=$(echo "$keys" | awk '/PrivateKey:/{print $2}')
-    pubKey=$(echo "$keys"  | awk '/Password:/{print $2}')
+    privKey=$(echo "$keys" | tr -d '\r' | awk '/PrivateKey:/{print $2}')
+    pubKey=$(echo "$keys"  | tr -d '\r' | awk '/Password:/{print $2}')
 
     [ -z "$privKey" ] || [ -z "$pubKey" ] && { echo "${red}Ошибка получения ключей${reset}"; return 1; }
 
