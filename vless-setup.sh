@@ -1,7 +1,7 @@
 #!/bin/bash
 # =================================================================
 # Xray VLESS + WebSocket + TLS + Nginx + WARP + CDN
-# Версия: 2.1 — Аудит и исправления
+# Версия: 2.2 — Финальная
 # =================================================================
 
 set -euo pipefail   # FIX: Раньше скрипт продолжал выполнение при ошибках
@@ -18,10 +18,8 @@ configPath='/usr/local/etc/xray/config.json'
 nginxPath='/etc/nginx/conf.d/xray.conf'
 cf_key_file="/root/.cloudflare_api"
 warpDomainsFile='/usr/local/etc/xray/warp_domains.txt'
-# FIX: script_path больше не нужен как глобальная переменная — используем $0
 
 # --- ХУКИ ДЛЯ ACME.SH ---
-# FIX: Хуки должны работать до isRoot/setupAlias чтобы не ломать flow
 case "${1:-}" in
     "open-80")
         ufw status | grep -q inactive && exit 0
@@ -74,7 +72,6 @@ identifyOS() {
 
 installPackage() {
     local package_name="$1"
-    # FIX: required=$2 — но реализация была неверной, параметр игнорировался
     if ${PACKAGE_MANAGEMENT_INSTALL} "$package_name" &>/dev/null; then
         echo "info: $package_name installed."
     else
@@ -102,7 +99,6 @@ run_task() {
         echo -e "[${green} DONE ${reset}] $msg"
     else
         echo -e "[${red} FAIL ${reset}] $msg"
-        # FIX: Раньше exit 1 убивал установку. Теперь возвращаем код ошибки,
         #      а критические задачи сами решают, умирать ли.
         return 1
     fi
@@ -361,7 +357,6 @@ PYEOF
 
 applyWarpDomains() {
     [ ! -f "$warpDomainsFile" ] && printf 'openai.com\nchatgpt.com\ncloudflare.com\n' > "$warpDomainsFile"
-    # FIX: Старый код мог генерировать невалидный JSON при спецсимволах в доменах
     local domains_json
     domains_json=$(awk 'NF {printf "\"domain:%s\",", $1}' "$warpDomainsFile" | sed 's/,$//')
     jq "(.routing.rules[] | select(.outboundTag == \"warp\")) |= (.domain = [$domains_json] | del(.port))" \
@@ -475,7 +470,6 @@ configCert() {
         ~/.acme.sh/acme.sh --issue --dns dns_cf -d "$userDomain" --force
     else
         openPort80
-        # FIX: Абсолютный путь к хукам через /usr/local/bin/vwn
         ~/.acme.sh/acme.sh --issue --standalone -d "$userDomain" \
             --pre-hook "/usr/local/bin/vwn open-80" \
             --post-hook "/usr/local/bin/vwn close-80" \
@@ -520,7 +514,6 @@ configWarp() {
     systemctl enable --now warp-svc
     sleep 3
 
-    # FIX: Проверяем регистрацию перед попыткой, сброс если нужно
     if ! warp-cli --accept-tos registration show &>/dev/null; then
         warp-cli --accept-tos registration delete &>/dev/null || true
         local attempts=0
@@ -532,7 +525,6 @@ configWarp() {
     fi
 
     warp-cli --accept-tos mode proxy
-    # FIX: Явно указываем порт SOCKS5 (по умолчанию может быть не 40000)
     warp-cli --accept-tos set-proxy-port 40000 2>/dev/null || true
     warp-cli --accept-tos connect
     sleep 5
@@ -559,7 +551,6 @@ writeXrayConfig() {
 
     mkdir -p /usr/local/etc/xray /var/log/xray
 
-    # FIX: Добавлены критические настройки для стабильности VLESS:
     #  - sniffing для корректной маршрутизации доменов
     #  - правило блокировки WARP-петель (локальные IP в free outbound)
     #  - fallbacks для случаев некорректных подключений
@@ -567,9 +558,9 @@ writeXrayConfig() {
     cat > "$configPath" << EOF
 {
     "log": {
-        "access": "/var/log/xray/access.log",
+        "access": "none",
         "error": "/var/log/xray/error.log",
-        "loglevel": "warning"
+        "loglevel": "error"
     },
     "inbounds": [{
         "port": $xrayPort,
@@ -587,9 +578,7 @@ writeXrayConfig() {
             }
         },
         "sniffing": {
-            "enabled": true,
-            "destOverride": ["http", "tls", "quic"],
-            "routeOnly": true
+            "enabled": false
         }
     }],
     "outbounds": [
@@ -597,7 +586,7 @@ writeXrayConfig() {
             "tag": "free",
             "protocol": "freedom",
             "settings": {
-                "domainStrategy": "UseIPv4v6"
+                "domainStrategy": "UseIPv4"
             }
         },
         {
@@ -642,6 +631,48 @@ writeXrayConfig() {
 EOF
 }
 
+setupWarpWatchdog() {
+    # WARP имеет свойство тихо отваливаться под нагрузкой.
+    # Watchdog каждые 2 минуты проверяет SOCKS5 и переподключает если нужно.
+    cat > /usr/local/bin/warp-watchdog.sh << 'WDOG'
+#!/bin/bash
+CHECK_URL="https://www.cloudflare.com/cdn-cgi/trace/"
+PROXY="socks5://127.0.0.1:40000"
+MAX_LATENCY=5
+
+result=$(curl -s --connect-timeout $MAX_LATENCY -x "$PROXY" "$CHECK_URL" 2>/dev/null)
+
+if echo "$result" | grep -q "warp=on\|warp=plus"; then
+    exit 0
+fi
+
+logger -t warp-watchdog "WARP не отвечает — переподключение..."
+warp-cli --accept-tos disconnect 2>/dev/null
+sleep 2
+warp-cli --accept-tos connect
+sleep 5
+
+# Проверяем ещё раз
+result2=$(curl -s --connect-timeout $MAX_LATENCY -x "$PROXY" "$CHECK_URL" 2>/dev/null)
+if echo "$result2" | grep -q "warp=on\|warp=plus"; then
+    logger -t warp-watchdog "WARP восстановлен."
+else
+    logger -t warp-watchdog "WARP не восстановился — перезапуск сервиса..."
+    systemctl restart warp-svc
+    sleep 8
+    warp-cli --accept-tos connect
+fi
+WDOG
+    chmod +x /usr/local/bin/warp-watchdog.sh
+
+    cat > /etc/cron.d/warp-watchdog << 'EOF'
+# Проверка WARP каждые 2 минуты
+*/2 * * * * root /usr/local/bin/warp-watchdog.sh
+EOF
+    chmod 644 /etc/cron.d/warp-watchdog
+    echo "${green}WARP watchdog установлен (проверка каждые 2 мин).${reset}"
+}
+
 writeNginxConfig() {
     local xrayPort="$1"
     local domain="$2"
@@ -653,7 +684,6 @@ writeNginxConfig() {
 
     setNginxCert
 
-    # FIX: worker_rlimit_nofile и keepalive для стабильности под нагрузкой
     cat > /etc/nginx/nginx.conf << 'NGINXMAIN'
 user www-data;
 worker_processes auto;
@@ -678,7 +708,6 @@ http {
     types_hash_max_size 2048;
     server_tokens off;
 
-    # FIX: Буферы для WebSocket/proxy
     proxy_buffers 8 16k;
     proxy_buffer_size 32k;
 
@@ -704,7 +733,6 @@ server {
 }
 DEFAULTCONF
 
-    # FIX: Добавлены proxy_read_timeout / send_timeout для стабильности WS
     cat > "$nginxPath" << EOF
 server {
     listen 443 ssl http2;
@@ -720,7 +748,6 @@ server {
     ssl_session_cache shared:SSL:10m;
     ssl_session_tickets off;
 
-    # FIX: Таймауты WebSocket — без них соединение рвётся через 60с
     proxy_read_timeout 3600s;
     proxy_send_timeout 3600s;
 
@@ -778,7 +805,6 @@ getConfigInfo() {
 getShareUrl() {
     getConfigInfo || return 1
     local encoded_path
-    # FIX: Правильная URL-кодировка пути
     encoded_path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$xray_path'))" 2>/dev/null \
         || echo "$xray_path" | sed 's|/|%2F|g')
     echo "vless://${xray_uuid}@${xray_userDomain}:443?encryption=none&security=tls&sni=${xray_userDomain}&type=ws&host=${xray_userDomain}&path=${encoded_path}#${xray_userDomain}"
@@ -810,7 +836,6 @@ modifyXrayPort() {
     oldPort=$(jq ".inbounds[0].port" "$configPath")
     read -rp "New Xray Port [$oldPort]: " xrayPort
     [ -z "$xrayPort" ] && return
-    # FIX: Валидация диапазона порта
     if ! [[ "$xrayPort" =~ ^[0-9]+$ ]] || [ "$xrayPort" -lt 1024 ] || [ "$xrayPort" -gt 65535 ]; then
         echo "${red}Некорректный порт.${reset}"; return 1
     fi
@@ -828,7 +853,6 @@ modifyWsPath() {
     [ -z "$wsPath" ] && wsPath=$(generateRandomPath)
     [[ ! "$wsPath" =~ ^/ ]] && wsPath="/$wsPath"
 
-    # FIX: Экранируем слеши для sed
     local oldPathEscaped newPathEscaped
     oldPathEscaped=$(echo "$oldPath" | sed 's|/|\\/|g')
     newPathEscaped=$(echo "$wsPath" | sed 's|/|\\/|g')
@@ -845,7 +869,6 @@ modifyProxyPassUrl() {
     [ -z "$newUrl" ] && return
     local oldUrl
     oldUrl=$(grep "proxy_pass" "$nginxPath" | grep -v "127.0.0.1" | awk '{print $2}' | tr -d ';' | head -1)
-    # FIX: Экранируем URL для sed
     local oldUrlEscaped newUrlEscaped
     oldUrlEscaped=$(echo "$oldUrl" | sed 's|[/&]|\\&|g')
     newUrlEscaped=$(echo "$newUrl" | sed 's|[/&]|\\&|g')
@@ -885,7 +908,6 @@ enableBBR() {
     if sysctl net.ipv4.tcp_congestion_control 2>/dev/null | grep -q "bbr"; then
         echo "${yellow}BBR уже активен.${reset}"; return
     fi
-    # FIX: Проверяем дубли перед добавлением
     grep -q "tcp_congestion_control=bbr" /etc/sysctl.conf || echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
     grep -q "default_qdisc=fq" /etc/sysctl.conf || echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf
     sysctl -p
@@ -924,14 +946,12 @@ setupWebJail() {
     echo -e "${cyan}Настройка Web-Jail...${reset}"
     [ ! -f /etc/fail2ban/jail.local ] && setupFail2Ban
 
-    # FIX: Улучшенные паттерны, убраны ложные срабатывания на /
     cat > /etc/fail2ban/filter.d/nginx-probe.conf << 'EOF'
 [Definition]
 failregex = ^<HOST> - .* "(GET|POST|HEAD) .*(\.php|wp-login|admin|\.env|\.git|config\.js|setup\.cgi|xmlrpc).*" (400|403|404|405) \d+
 ignoreregex = ^<HOST> - .* "(GET|POST) /favicon.ico.*"
 EOF
 
-    # FIX: Проверяем, не добавлена ли уже секция
     if ! grep -q "\[nginx-probe\]" /etc/fail2ban/jail.local; then
         cat >> /etc/fail2ban/jail.local << 'EOF'
 
@@ -963,7 +983,6 @@ clearLogs() {
 }
 
 setupLogrotate() {
-    # FIX: Добавлен dateext, sharedscripts и postrotate для reload без рестарта
     cat > /etc/logrotate.d/xray << 'EOF'
 /var/log/xray/*.log {
     daily
@@ -987,7 +1006,6 @@ EOF
 # ============================================================
 
 setupSslCron() {
-    # FIX: Используем /etc/cron.d для надёжности (system cron, не user crontab)
     cat > /etc/cron.d/acme-renew << 'EOF'
 # SSL автообновление — каждые 35 дней в 03:00
 0 3 */35 * * root /root/.acme.sh/acme.sh --cron --home /root/.acme.sh --pre-hook "/usr/local/bin/vwn open-80" --post-hook "/usr/local/bin/vwn close-80" >> /var/log/acme_cron.log 2>&1
@@ -1140,7 +1158,6 @@ prepareSoftware() {
 
     echo "--- [3/3] Безопасность ---"
     run_task "Настройка UFW (22, 443)" "ufw allow 22/tcp && ufw allow 443/tcp && ufw allow 443/udp && echo 'y' | ufw enable"
-    # FIX: Anti-Ping через /etc/sysctl.d/ — не затирается при обновлениях
     cat > /etc/sysctl.d/99-xray.conf << 'SYSCTL'
 net.ipv4.icmp_echo_ignore_all = 1
 net.core.somaxconn = 65535
@@ -1152,7 +1169,6 @@ SYSCTL
 
 install() {
     isRoot
-    # FIX: set -e снимаем только для интерактивных частей, не для всего скрипта
     set +e
     clear
     echo "${green}>>> Установка Xray VLESS + WARP + CDN <<<${reset}"
@@ -1176,6 +1192,7 @@ install() {
     run_task "Ротация логов"          setupLogrotate
     run_task "Автоочистка логов"      setupLogClearCron
     run_task "Автообновление SSL"     setupSslCron
+    run_task "WARP Watchdog"          setupWarpWatchdog
 
     systemctl enable --now xray nginx
     systemctl restart xray nginx
@@ -1231,6 +1248,7 @@ menu() {
         echo -e "\t${green}16.${reset} Включить Fail2Ban"
         echo -e "\t${green}17.${reset} Включить Web-Jail"
         echo -e "\t${green}18.${reset} Сменить SSH порт"
+        echo -e "\t${green}30.${reset} Установить WARP Watchdog"
         echo -e "\t—————————————— Логи —————————————————————"
         echo -e "\t${green}19.${reset} Логи Xray (access)"
         echo -e "\t${green}20.${reset} Логи Xray (error)"
@@ -1269,6 +1287,7 @@ menu() {
             16) setupFail2Ban ;;
             17) setupWebJail ;;
             18) changeSshPort ;;
+            30) setupWarpWatchdog ;;
             19) tail -n 80 /var/log/xray/access.log ;;
             20) tail -n 80 /var/log/xray/error.log ;;
             21) tail -n 80 /var/log/nginx/access.log ;;
@@ -1286,7 +1305,9 @@ menu() {
                     uninstallPackage 'cloudflare-warp' || true
                     bash -c "$(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ remove || true
                     rm -rf /etc/nginx /usr/local/etc/xray /root/.cloudflare_api "$warpDomainsFile" \
-                           /etc/cron.d/acme-renew /etc/cron.d/clear-logs /etc/sysctl.d/99-xray.conf
+                           /etc/cron.d/acme-renew /etc/cron.d/clear-logs /etc/cron.d/warp-watchdog \
+                           /usr/local/bin/warp-watchdog.sh /usr/local/bin/clear-logs.sh \
+                           /etc/sysctl.d/99-xray.conf
                     echo "${green}Удаление завершено.${reset}"
                 fi ;;
             27) manageUFW ;;
