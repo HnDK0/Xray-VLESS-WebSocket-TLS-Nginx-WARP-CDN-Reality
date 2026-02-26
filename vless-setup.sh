@@ -1124,8 +1124,8 @@ writeRealityConfig() {
     # Генерируем x25519 ключи
     keys=$(xray x25519 2>/dev/null) || { echo "${red}Ошибка: xray x25519 не работает${reset}"; return 1; }
 
-    privKey=$(echo "$keys" | awk '/Private key:/{print $3}')
-    pubKey=$(echo "$keys"  | awk '/Public key:/{print $3}')
+    privKey=$(echo "$keys" | awk '/PrivateKey:/{print $2}')
+    pubKey=$(echo "$keys"  | awk '/Password:/{print $2}')
 
     [ -z "$privKey" ] || [ -z "$pubKey" ] && { echo "${red}Ошибка получения ключей${reset}"; return 1; }
 
@@ -1309,9 +1309,11 @@ showRealityInfo() {
     destHost=$(jq -r '.inbounds[0].streamSettings.realitySettings.serverNames[0]' "$realityConfigPath")
     privKey=$(jq -r '.inbounds[0].streamSettings.realitySettings.privateKey' "$realityConfigPath")
 
-    # Получаем публичный ключ из приватного
-    pubKey=$(echo "$privKey" | xray x25519 -i /dev/stdin 2>/dev/null | grep "Public key:" | awk '{print $3}')
-    [ -z "$pubKey" ] && pubKey=$(grep "PublicKey:" /usr/local/etc/xray/reality_client.txt 2>/dev/null | awk '{print $2}')
+    # Получаем публичный ключ (Password в новом формате xray)
+    local tmpkeys
+    tmpkeys=$(echo "$privKey" | xray x25519 2>/dev/null) || true
+    pubKey=$(echo "$tmpkeys" | awk '/Password:/{print $2}')
+    [ -z "$pubKey" ] && pubKey=$(awk '/PublicKey:/{print $2}' /usr/local/etc/xray/reality_client.txt 2>/dev/null)
 
     local serverIP
     serverIP=$(curl -s --connect-timeout 5 https://ip.sb 2>/dev/null)
