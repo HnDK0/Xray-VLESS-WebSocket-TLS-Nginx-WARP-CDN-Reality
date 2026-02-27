@@ -31,9 +31,8 @@ vwn update
 - ✅ **VLESS + Reality** — прямые подключения без CDN (роутер, Clash)
 - ✅ **Nginx** — reverse proxy с сайтом-заглушкой
 - ✅ **Cloudflare WARP** — роутинг выбранных доменов или всего трафика
-- ✅ **WARP-in-WARP** — второй WARP туннель (WireGuard) поверх первого
-- ✅ **Psiphon** — обход блокировок с выбором страны выхода, опционально через WARP
-- ✅ **Tor** — обход блокировок с выбором страны выхода, обновление цепи
+- ✅ **Psiphon** — обход блокировок с выбором страны выхода
+- ✅ **Tor** — обход блокировок с выбором страны выхода, поддержка мостов (obfs4, snowflake, meek)
 - ✅ **Relay** — внешний outbound (VLESS/VMess/Trojan/SOCKS по ссылке)
 - ✅ **CDN защита** — блокировка прямого доступа, только через Cloudflare
 - ✅ **WARP Watchdog** — автовосстановление WARP при обрыве
@@ -79,10 +78,10 @@ outbound (по routing rules):
 ================================================================
    XRAY VLESS + WARP + CDN + REALITY | 27.02.2026 21:00
 ================================================================
-  NGINX: RUNNING  |  XRAY: RUNNING  |  WARP: ACTIVE
+  NGINX: RUNNING  |  XRAY: RUNNING  |  WARP: ACTIVE | Split
   SSL: OK (89 d)  |  BBR: ON  |  F2B: OFF
   WebJail: NO  |  CDN: OFF  |  Reality: ON (порт 8443)
-  Relay: OFF  |  Psiphon: ON (DE)  |  Tor: ON (US)
+  Relay: ON | Split (vless://...)  |  Psiphon: ON | Split, DE  |  Tor: ON | Split, US
 ----------------------------------------------------------------
     1.  Установить Xray (VLESS+WS+TLS+WARP+CDN)
     2.  Показать QR-код и ссылку
@@ -95,7 +94,7 @@ outbound (по routing rules):
     8.  Сменить домен
     —————————————— CDN и WARP ———————————————
     9.  Переключить CDN режим (ON/OFF)
-    10. Переключить режим WARP (Global/Split)
+    10. Переключить режим WARP (Global/Split/OFF)
     11. Добавить домен в WARP
     12. Удалить домен из WARP
     13. Редактировать список WARP (Nano)
@@ -130,11 +129,23 @@ outbound (по routing rules):
 ----------------------------------------------------------------
 ```
 
-## Туннели (пункты 31–35)
+### Статусы в заголовке
+
+Каждый туннель показывает текущий режим маршрутизации прямо в шапке меню:
+
+| Статус | Описание |
+|--------|----------|
+| `ACTIVE \| Global` | Весь трафик идёт через туннель |
+| `ACTIVE \| Split` | Только домены из списка |
+| `ACTIVE \| маршрут OFF` | Сервис запущен, но не задействован в роутинге |
+| `OFF` | Сервис не запущен |
+
+## Туннели (пункты 31–34)
 
 Все туннели работают по одинаковой схеме:
 - **Global режим** — весь трафик через туннель
 - **Split режим** — только домены из списка
+- **OFF** — туннель отключён от роутинга Xray (сервис остаётся запущенным)
 - Применяются одновременно к обоим конфигам (WS и Reality)
 
 ### VLESS + Reality (пункт 31)
@@ -152,20 +163,23 @@ vless://UUID@IP:8443?security=reality&sni=microsoft.com&fp=chrome&pbk=KEY&sid=SI
 vless://...  vmess://...  trojan://...  socks5://...
 ```
 
+Режимы: **Global / Split / OFF**. Переключение — пункт 2 в подменю.
+
 ### Psiphon (пункт 33)
 
 Обход блокировок с выбором страны выхода (DE, NL, US, GB, FR, AT, CA, SE и др.).
 
-**Режимы запуска:**
-- **Прямое подключение** — стандартный режим
-Переключение режима без переустановки — пункт 10 в подменю.
+Режимы: **Global / Split / OFF**. Переключение — пункт 2 в подменю.
 
 ### Tor (пункт 34)
 
 Обход блокировок с выбором страны выхода через `ExitNodes`.
 
+Режимы: **Global / Split / OFF**. Переключение — пункт 2 в подменю.
+
 **Дополнительно:**
 - **Обновить цепь** — запросить новый IP без перезапуска Tor
+- **Мосты (Bridges)** — поддержка obfs4, snowflake, meek-azure для обхода блокировки самого Tor
 - Проверка IP с определением страны выхода
 
 **Рекомендация:** использовать Split режим — Tor медленнее обычного интернета.
@@ -178,6 +192,8 @@ openai.com, chatgpt.com, oaistatic.com, oaiusercontent.com, auth0.openai.com
 ```
 
 **Global режим** — весь трафик через WARP.
+
+**OFF** — WARP отключён от роутинга Xray.
 
 **WARP Watchdog (пункт 30)** — cron каждые 2 минуты, автопереподключение при обрыве.
 
@@ -218,13 +234,12 @@ openai.com, chatgpt.com, oaistatic.com, oaiusercontent.com, auth0.openai.com
 ├── psiphon_domains.txt      # Домены для Psiphon split
 ├── tor_domains.txt          # Домены для Tor split
 ├── relay.conf               # Конфиг Relay
-├── relay_domains.txt        # Домены для Relay split
+└── relay_domains.txt        # Домены для Relay split
 
 /etc/systemd/system/
 ├── xray.service             # VLESS+WS
 ├── xray-reality.service     # Reality
 └── psiphon.service          # Psiphon
-
 
 /etc/cron.d/
 ├── acme-renew               # Автообновление SSL
@@ -246,8 +261,7 @@ warp-cli --accept-tos connect
 
 ### Psiphon не подключается
 ```bash
-# Переключить на режим "через WARP" — пункт 33 → 10
-# Или проверить логи:
+# Проверить логи:
 tail -50 /var/log/psiphon/psiphon.log
 ```
 
@@ -268,22 +282,29 @@ nginx -t && systemctl reload nginx
 vwn  # Пункт 7 или пункт 28
 ```
 
+### Tor не подключается
+```bash
+# Попробовать мосты (пункт 34 → 11)
+# Или проверить статус:
+systemctl status tor
+tail -50 /var/log/tor/notices.log
+```
+
 ## Удаление
 
 ```bash
 vwn  # Пункт 26
 ```
 
-Удаляет: Xray, Nginx, WARP, Psiphon, Tor, WARP2, все конфиги, сервисы, cron задачи, sysctl настройки.
+Удаляет: Xray, Nginx, WARP, Psiphon, Tor, все конфиги, сервисы, cron задачи, sysctl настройки.
 
 ## Зависимости
 
 - [Xray-core](https://github.com/XTLS/Xray-core)
 - [Cloudflare WARP](https://1.1.1.1/)
-- [wgcf](https://github.com/ViRb3/wgcf) (для WARP2)
 - [Psiphon tunnel core](https://github.com/Psiphon-Labs/psiphon-tunnel-core-binaries)
 - [acme.sh](https://github.com/acmesh-official/acme.sh)
-- nginx, jq, ufw, tor, wireguard-tools, qrencode
+- nginx, jq, ufw, tor, obfs4proxy, qrencode
 
 ## Лицензия
 
