@@ -148,7 +148,25 @@ EOF
 
 installReality() {
     echo -e "${cyan}$(msg reality_setup_title)${reset}"
-    [ -z "${PACKAGE_MANAGEMENT_INSTALL:-}" ] && identifyOS
+    identifyOS
+
+    # Устанавливаем зависимости если ещё не установлены
+    for p in tar gpg unzip jq nano ufw curl qrencode python3; do
+        command -v "$p" &>/dev/null || run_task "Установка $p" "installPackage $p" || true
+    done
+    if ! command -v xray &>/dev/null; then
+        run_task "Установка Xray-core" installXray
+    fi
+    if ! command -v warp-cli &>/dev/null; then
+        run_task "Установка Cloudflare WARP" installWarp
+    fi
+    if ! systemctl is-active --quiet warp-svc 2>/dev/null; then
+        run_task "Настройка WARP" configWarp
+        run_task "WARP Watchdog" setupWarpWatchdog
+    fi
+    run_task "Системные параметры" applySysctl
+    run_task "Ротация логов" setupLogrotate
+    run_task "Автоочистка логов" setupLogClearCron
 
     read -rp "$(msg reality_port_prompt)" realityPort
     [ -z "$realityPort" ] && realityPort=8443

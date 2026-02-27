@@ -10,23 +10,29 @@ prepareSoftware() {
     run_task "Обновление репозиториев" "${PACKAGE_MANAGEMENT_UPDATE}"
 
     echo "--- [2/3] $(msg install_done) ---"
-    for p in tar gpg unzip nginx jq nano ufw socat curl qrencode python3; do
+    for p in tar gpg unzip jq nano ufw socat curl qrencode python3; do
         run_task "Установка $p" "installPackage $p" || true
     done
     run_task "Установка Xray-core"      installXray
     run_task "Установка Cloudflare WARP" installWarp
+}
+
+prepareSoftwareWs() {
+    prepareSoftware
+    run_task "Установка Nginx" "installPackage nginx" || true
 
     echo "--- [3/3] $(msg menu_sep_sec) ---"
     run_task "Настройка UFW" "ufw allow 22/tcp && ufw allow 443/tcp && ufw allow 443/udp && echo 'y' | ufw enable"
     run_task "Системные параметры" applySysctl
 }
 
-install() {
+# Установка VLESS + WebSocket + TLS + Nginx + WARP + CDN
+installWsTls() {
     isRoot
     clear
     identifyOS
-    echo "${green}$(msg install_xray_title)${reset}"
-    prepareSoftware
+    echo "${green}$(msg install_type_ws_title)${reset}"
+    prepareSoftwareWs
 
     echo -e "\n${green}--- $(msg install_version) ---${reset}"
     read -rp "$(msg enter_domain_vpn)" userDomain
@@ -53,6 +59,34 @@ install() {
 
     echo -e "\n${green}$(msg install_complete)${reset}"
     getQrCode
+}
+
+# Установка VLESS + Reality + WARP
+installRealityOnly() {
+    isRoot
+    clear
+    identifyOS
+    echo "${green}$(msg install_type_reality_title)${reset}"
+    # Все зависимости, WARP, логи — installReality() сделает сам
+    installReality
+}
+
+install() {
+    isRoot
+    clear
+    echo -e "${cyan}================================================================${reset}"
+    echo -e "   $(msg install_type_title)"
+    echo -e "${cyan}================================================================${reset}"
+    echo ""
+    echo -e "\t${green}$(msg install_type_1)${reset}"
+    echo -e "\t${green}$(msg install_type_2)${reset}"
+    echo ""
+    read -rp "$(msg choose)" install_type_choice
+    case "${install_type_choice:-1}" in
+        1) installWsTls ;;
+        2) installRealityOnly ;;
+        *) echo "${red}$(msg invalid)${reset}"; return 1 ;;
+    esac
 }
 
 fullRemove() {

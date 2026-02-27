@@ -85,6 +85,13 @@ _initLang() {
     MSG[os_unsupported]=$(    [ "$VWN_LANG" = en ] && echo "Only apt/dnf/yum systems supported." || echo "Поддерживаются только apt/dnf/yum системы.")
     MSG[reinstall_hint]=$(    [ "$VWN_LANG" = en ] && echo "Reinstall:"                || echo "Переустановите:")
 
+    # ── INSTALL TYPE SELECTION ────────────────────────────────────
+    MSG[install_type_title]=$(   [ "$VWN_LANG" = en ] && echo "Select installation type:" || echo "Выберите тип установки:")
+    MSG[install_type_1]=$(       [ "$VWN_LANG" = en ] && echo "1) VLESS + WebSocket + TLS + Nginx + WARP + CDN" || echo "1) VLESS + WebSocket + TLS + Nginx + WARP + CDN")
+    MSG[install_type_2]=$(       [ "$VWN_LANG" = en ] && echo "2) VLESS + Reality + WARP" || echo "2) VLESS + Reality + WARP")
+    MSG[install_type_ws_title]=$([ "$VWN_LANG" = en ] && echo "=== Installing VLESS+WS+TLS+WARP+CDN ===" || echo "=== Установка VLESS+WS+TLS+WARP+CDN ===")
+    MSG[install_type_reality_title]=$([ "$VWN_LANG" = en ] && echo "=== Installing VLESS+Reality+WARP ===" || echo "=== Установка VLESS+Reality+WARP ===")
+
     # ── MENU ──────────────────────────────────────────────────────
     MSG[menu_title]=$(        [ "$VWN_LANG" = en ] && echo "XRAY VLESS + WARP + CDN + REALITY" || echo "XRAY VLESS + WARP + CDN + REALITY")
     MSG[menu_install]=$(      [ "$VWN_LANG" = en ] && echo "Install Xray (VLESS+WS+TLS+WARP+CDN)"  || echo "Установить Xray (VLESS+WS+TLS+WARP+CDN)")
