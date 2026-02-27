@@ -66,7 +66,10 @@ writePsiphonConfig() {
     "LimitTunnelProtocols": []
 }
 EOF
+    # Создаём директорию с правами для пользователя nobody
     mkdir -p /var/lib/psiphon
+    chown nobody:nogroup /var/lib/psiphon
+    chmod 755 /var/lib/psiphon
 }
 
 setupPsiphonService() {
