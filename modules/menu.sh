@@ -5,15 +5,15 @@
 
 prepareSoftware() {
     identifyOS
-    echo "--- [1/3] $(msg install_version) ---"
+    echo "--- [1/3] $(msg install_deps) ---"
     run_task "Чистка пакетов" "rm -f /var/lib/dpkg/lock* && dpkg --configure -a 2>/dev/null || true"
-    run_task "Обновление репозиториев" "${PACKAGE_MANAGEMENT_UPDATE}"
+    run_task "Обновление репозиториев" "$PACKAGE_MANAGEMENT_UPDATE"
 
-    echo "--- [2/3] $(msg install_done) ---"
+    echo "--- [2/3] $(msg install_deps) ---"
     for p in tar gpg unzip jq nano ufw socat curl qrencode python3; do
-        run_task "Установка $p" "installPackage $p" || true
+        run_task "Установка $p" "installPackage '$p'" || true
     done
-    run_task "Установка Xray-core"      installXray
+    run_task "Установка Xray-core"       installXray
     run_task "Установка Cloudflare WARP" installWarp
 }
 

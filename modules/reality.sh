@@ -150,9 +150,13 @@ installReality() {
     echo -e "${cyan}$(msg reality_setup_title)${reset}"
     identifyOS
 
-    # Устанавливаем зависимости если ещё не установлены
-    for p in tar gpg unzip jq nano ufw curl qrencode python3; do
-        command -v "$p" &>/dev/null || run_task "Установка $p" "installPackage $p" || true
+    echo "--- [1/3] $(msg install_deps) ---"
+    run_task "Чистка пакетов" "rm -f /var/lib/dpkg/lock* && dpkg --configure -a 2>/dev/null || true"
+    run_task "Обновление репозиториев" "$PACKAGE_MANAGEMENT_UPDATE"
+
+    echo "--- [2/3] $(msg install_deps) ---"
+    for p in tar gpg unzip jq nano ufw socat curl qrencode python3; do
+        run_task "Установка $p" "installPackage '$p'" || true
     done
     if ! command -v xray &>/dev/null; then
         run_task "Установка Xray-core" installXray
@@ -160,11 +164,14 @@ installReality() {
     if ! command -v warp-cli &>/dev/null; then
         run_task "Установка Cloudflare WARP" installWarp
     fi
+
+    echo "--- [3/3] $(msg menu_sep_sec) ---"
+    run_task "Настройка UFW" "ufw allow 22/tcp && echo 'y' | ufw enable"
+    run_task "Системные параметры" applySysctl
     if ! systemctl is-active --quiet warp-svc 2>/dev/null; then
         run_task "Настройка WARP" configWarp
         run_task "WARP Watchdog" setupWarpWatchdog
     fi
-    run_task "Системные параметры" applySysctl
     run_task "Ротация логов" setupLogrotate
     run_task "Автоочистка логов" setupLogClearCron
 
