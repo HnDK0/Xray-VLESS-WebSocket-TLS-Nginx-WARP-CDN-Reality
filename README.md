@@ -319,7 +319,7 @@ MIT License
 
 ---
 
-<details open>
+<details>
 <summary>🇷🇺 Русский</summary>
 
 # VWN — Xray VLESS + WARP + CDN + Reality
@@ -635,5 +635,5 @@ vwn  # Пункт 26
 ## Лицензия
 
 MIT License
-
 </details>
+
