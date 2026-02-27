@@ -21,6 +21,31 @@ reset=$(tput sgr0 2>/dev/null || echo "")
 MODULES="lang core xray nginx warp reality relay psiphon tor security logs menu"
 UPDATE_ONLY=false
 
+# Fallback msg() — works BEFORE lang.sh is loaded.
+# After lang.sh is sourced and _initLang called, msg() will be redefined.
+msg() {
+    case "$1" in
+        run_as_root)     echo "Run as root! / Запустите от root!" ;;
+        os_unsupported)  echo "Only apt/dnf/yum systems supported." ;;
+        install_deps)    echo "Installing dependencies..." ;;
+        install_modules) echo "Downloading modules..." ;;
+        install_vwn)     echo "Installing vwn loader..." ;;
+        loading)         echo "Loading" ;;
+        error)           echo "ERROR" ;;
+        module_fail)     echo "Failed to download" ;;
+        install_title)   echo "VWN — Xray VLESS + WARP + CDN + Reality" ;;
+        update_title)    echo "VWN — Updating modules" ;;
+        update_modules)  echo "Updating modules (configs untouched)..." ;;
+        update_done)     echo "Update complete! Version" ;;
+        install_done)    echo "Modules installed in" ;;
+        install_version) echo "Version" ;;
+        launching_menu)  echo "Launching setup menu..." ;;
+        installed_in)    echo "installed in" ;;
+        run_vwn)         echo "Run: vwn" ;;
+        *)               echo "$1" ;;
+    esac
+}
+
 # Парсим аргументы
 for arg in "$@"; do
     case "$arg" in
@@ -94,9 +119,14 @@ case "${1:-}" in
         bash <(curl -fsSL https://raw.githubusercontent.com/HnDK0/VLESS-WebSocket-TLS-Nginx-WARP/main/install.sh) --update
         exit 0 ;;
 esac
-for module in core xray nginx warp reality relay psiphon tor security logs menu; do
+for module in lang core xray nginx warp reality relay psiphon tor security logs menu; do
     [ -f "$VWN_LIB/${module}.sh" ] && source "$VWN_LIB/${module}.sh" || { echo "ERROR: module $module not found"; exit 1; }
 done
+VWN_CONF="/usr/local/etc/xray/vwn.conf"
+if [ ! -f "$VWN_CONF" ] || ! grep -q "VWN_LANG=" "$VWN_CONF" 2>/dev/null; then
+    selectLang
+    _initLang
+fi
 isRoot
 menu "$@"
 VWNEOF
@@ -130,11 +160,19 @@ main() {
     if $UPDATE_ONLY; then
         echo -e "${cyan}$(msg update_modules)${reset}"
         download_modules || exit 1
+        # Загружаем lang.sh и инициализируем переводы
+        [ -f "$VWN_LIB/lang.sh" ] && { source "$VWN_LIB/lang.sh"; _initLang; }
         install_vwn_binary
         echo -e "\n${green}$(msg update_done): $(show_version)${reset}"
         echo "$(msg run_vwn)"
     else
         download_modules || exit 1
+        # Загружаем lang.sh, предлагаем выбор языка
+        if [ -f "$VWN_LIB/lang.sh" ]; then
+            source "$VWN_LIB/lang.sh"
+            selectLang
+            _initLang
+        fi
         install_vwn_binary
 
         echo -e "\n${green}================================================================${reset}"
